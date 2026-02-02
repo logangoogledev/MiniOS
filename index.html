@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>MiniOS — Web Emulator</title>
+    <style>
+        body { font-family: system-ui, sans-serif; margin: 0; display:flex; flex-direction:column; height:100vh; }
+        header { padding: 8px 12px; background:#111; color:#fff }
+        #screen { flex:1; background:#000; display:flex; align-items:center; justify-content:center }
+        #controls { padding: 8px 12px; background:#f6f6f6 }
+    </style>
+</head>
+<body>
+<header>
+    <strong>MiniOS Web Emulator</strong> — loads `build/boot.img` from this server into an in-browser x86 emulator.
+</header>
+<div id="screen">
+    <div id="emulator_container">Your browser does not support the emulator or it failed to load.</div>
+</div>
+<div id="controls">
+    <button id="start">Start emulator</button>
+    <button id="stop">Stop emulator</button>
+    <span id="status">Idle</span>
+</div>
+
+<!-- Use libv86 from copy.sh CDN. If the URL stops working, install v86 locally or update the script src. -->
+<script src="https://copy.sh/v86/build/libv86.js"></script>
+<script>
+let emulator = null;
+const status = document.getElementById('status');
+
+async function start() {
+    if (emulator) return;
+    status.textContent = 'Starting...';
+    try {
+        emulator = new V86Starter({
+            wasm_path: "https://copy.sh/v86/build/v86.so", // hosted wasm
+            memory_size: 32 * 1024 * 1024,
+            vga_memory_size: 2 * 1024 * 1024,
+            autostart: true,
+            screen_container: document.getElementById('emulator_container'),
+            floppy: { url: '/build/boot.img' }
+        });
+
+        emulator.add_listener('emulator-ready', () => status.textContent = 'Running');
+        emulator.add_listener('poweroff', () => status.textContent = 'Powered off');
+    } catch (e) {
+        status.textContent = 'Failed: ' + e;
+        console.error(e);
+    }
+}
+
+function stop() {
+    if (!emulator) return;
+    emulator.stop();
+    emulator = null;
+    status.textContent = 'Stopped';
+}
+
+document.getElementById('start').addEventListener('click', start);
+document.getElementById('stop').addEventListener('click', stop);
+</script>
+</body>
+</html>
