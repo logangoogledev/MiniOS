@@ -20,18 +20,24 @@ jobs:
       - name: Install prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install -y nasm
+          sudo apt-get install -y nasm curl
 
       - name: Build boot image
         run: |
           mkdir -p build
           nasm -f bin boot/boot.asm -o build/boot.img
 
+      - name: Vendor v86 runtime (for offline pages)
+        run: |
+          chmod +x scripts/vendor_v86.sh
+          ./scripts/vendor_v86.sh
+
       - name: Prepare site content
         run: |
           rm -rf site || true
           mkdir -p site/build
           cp -r web/* site/
+          cp -r web/vendor site/vendor || true
           cp build/boot.img site/build/boot.img
 
       - name: Deploy to GitHub Pages (gh-pages branch)

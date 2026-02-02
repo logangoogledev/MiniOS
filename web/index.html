@@ -4,11 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>MiniOS — Web Emulator</title>
+    <link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVQImWNgYAAAAAMAAWgmWQ0AAAAASUVORK5CYII=">
     <style>
         body { font-family: system-ui, sans-serif; margin: 0; display:flex; flex-direction:column; height:100vh; }
         header { padding: 8px 12px; background:#111; color:#fff }
         #screen { flex:1; background:#000; display:flex; align-items:center; justify-content:center }
         #controls { padding: 8px 12px; background:#f6f6f6 }
+        #error { color: darkred; margin-left: 12px }
     </style>
 </head>
 <body>
@@ -22,20 +24,66 @@
     <button id="start">Start emulator</button>
     <button id="stop">Stop emulator</button>
     <span id="status">Idle</span>
+    <span id="error"></span>
 </div>
 
-<!-- Use libv86 from copy.sh CDN. If the URL stops working, install v86 locally or update the script src. -->
-<script src="https://copy.sh/v86/build/libv86.js"></script>
 <script>
+// Robust loader for libv86 with CDN fallbacks and helpful errors
+function loadScript(src) {
+    return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = src;
+        s.async = true;
+        s.onload = () => resolve(src);
+        s.onerror = (e) => reject(new Error('Failed to load ' + src));
+        document.head.appendChild(s);
+    });
+}
+
+async function ensureV86() {
+    // Try local vendor files first (works offline / in locked-down environments)
+    const localLib = '/web/vendor/libv86.js';
+    const localWasm = '/web/vendor/v86.so';
+    try {
+        await loadScript(localLib);
+        if (typeof V86Starter !== 'undefined') {
+            return { lib: localLib, wasm: localWasm };
+        }
+    } catch (e) {
+        console.warn('Local libv86 not available:', e.message);
+    }
+
+    // Fallback to public CDNs
+    const urls = [
+        'https://copy.sh/v86/build/libv86.js',
+        'https://cdn.jsdelivr.net/gh/copy/v86@master/build/libv86.js'
+    ];
+    for (const u of urls) {
+        try {
+            await loadScript(u);
+            if (typeof V86Starter !== 'undefined') {
+                return { lib: u, wasm: u.replace(/libv86.js$/, 'v86.so') };
+            }
+        } catch (e) {
+            console.warn(e);
+        }
+    }
+    throw new Error('Unable to load v86 library from local vendor or known CDNs. Check your network or run scripts/vendor_v86.sh to vendor files locally.');
+}
+
 let emulator = null;
 const status = document.getElementById('status');
+const errorEl = document.getElementById('error');
 
 async function start() {
     if (emulator) return;
     status.textContent = 'Starting...';
+    errorEl.textContent = '';
     try {
+        const loaded = await ensureV86();
+
         emulator = new V86Starter({
-            wasm_path: "https://copy.sh/v86/build/v86.so", // hosted wasm
+            wasm_path: loaded.wasm,
             memory_size: 32 * 1024 * 1024,
             vga_memory_size: 2 * 1024 * 1024,
             autostart: true,
@@ -46,7 +94,8 @@ async function start() {
         emulator.add_listener('emulator-ready', () => status.textContent = 'Running');
         emulator.add_listener('poweroff', () => status.textContent = 'Powered off');
     } catch (e) {
-        status.textContent = 'Failed: ' + e;
+        status.textContent = 'Failed';
+        errorEl.textContent = e.message;
         console.error(e);
     }
 }
