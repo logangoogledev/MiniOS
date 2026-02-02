@@ -1,0 +1,47 @@
+name: Build & Publish MiniOS Web Emulator
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nasm
+
+      - name: Build boot image
+        run: |
+          mkdir -p build
+          nasm -f bin boot/boot.asm -o build/boot.img
+
+      - name: Prepare site content
+        run: |
+          rm -rf site || true
+          mkdir -p site/build
+          cp -r web/* site/
+          cp build/boot.img site/build/boot.img
+
+      - name: Upload pages artifact
+        uses: actions/upload-pages-artifact@v1
+        with:
+          path: site
+
+  deploy:
+    needs: build-and-deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v1

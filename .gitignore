@@ -1,0 +1,5 @@
+# Ignore build artifacts and temp files
+build/
+*.img
+/tmp/minios-*
+.vscode/
